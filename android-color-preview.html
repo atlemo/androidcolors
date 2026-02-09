@@ -80,6 +80,25 @@
             cursor: pointer;
             overflow: hidden;
             transition: border-color 0.3s;
+            flex-shrink: 0;
+        }
+
+        .opacity-control {
+            margin-top: 15px;
+        }
+
+        .opacity-control label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 24px;
+            cursor: pointer;
         }
 
         .color-picker-btn:hover {
@@ -130,6 +149,44 @@
             margin: 0 auto;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
             transition: background-color 0.3s;
+            position: relative;
+            background-color: white;
+        }
+        
+        .color-preview::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            border-radius: 12px;
+            background-image: 
+                linear-gradient(45deg, #ccc 25%, transparent 25%),
+                linear-gradient(-45deg, #ccc 25%, transparent 25%),
+                linear-gradient(45deg, transparent 75%, #ccc 75%),
+                linear-gradient(-45deg, transparent 75%, #ccc 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 0;
+        }
+        
+        .color-preview.has-transparency::before {
+            opacity: 1;
+        }
+        
+        .color-preview::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            border-radius: 12px;
+            transition: background-color 0.3s;
+            z-index: 1;
         }
 
         .color-info {
@@ -163,6 +220,23 @@
             margin-top: 5px;
             display: none;
         }
+
+        .credits {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+        }
+
+        .credits a {
+            color: #2196F3;
+            text-decoration: underline;
+            transition: color 0.3s;
+        }
+
+        .credits a:hover {
+            color: #1976D2;
+        }
     </style>
 </head>
 <body>
@@ -184,6 +258,11 @@
                 </div>
             </div>
             <div class="error" id="errorMsg">Invalid color format</div>
+            
+            <div class="opacity-control">
+                <label for="opacitySlider">Opacity</label>
+                <input type="range" id="opacitySlider" min="0" max="255" value="255">
+            </div>
         </div>
 
         <div class="preview-section">
@@ -209,11 +288,16 @@
                 </div>
             </div>
         </div>
+        
+        <div class="credits">
+            Made by <a href="https://github.com/atlemo/" target="_blank" rel="noopener noreferrer">Atle Mo</a>
+        </div>
     </div>
 
     <script>
         const colorInput = document.getElementById('colorInput');
         const colorPicker = document.getElementById('colorPicker');
+        const opacitySlider = document.getElementById('opacitySlider');
         const colorPreview = document.getElementById('colorPreview');
         const colorIcon = document.getElementById('colorIcon');
         const errorMsg = document.getElementById('errorMsg');
@@ -221,6 +305,8 @@
         const hexFormat = document.getElementById('hexFormat');
         const rgbFormat = document.getElementById('rgbFormat');
         const opacityFormat = document.getElementById('opacityFormat');
+
+        let isUpdatingFromInput = false;
 
         function parseAndroidColor(value) {
             // Remove quotes and whitespace
@@ -257,7 +343,24 @@
             const opacity = color.alpha / 255;
             const rgbaColor = `rgba(${color.red}, ${color.green}, ${color.blue}, ${opacity})`;
             
-            colorPreview.style.backgroundColor = rgbaColor;
+            // Show checkered pattern only if there's transparency
+            if (color.alpha < 255) {
+                colorPreview.classList.add('has-transparency');
+            } else {
+                colorPreview.classList.remove('has-transparency');
+            }
+            
+            // Apply color to the ::after pseudo-element overlay
+            colorPreview.style.setProperty('--preview-color', rgbaColor);
+            const styleSheet = document.styleSheets[0];
+            const rules = Array.from(styleSheet.cssRules);
+            const afterRule = rules.find(rule => rule.selectorText === '.color-preview::after');
+            if (afterRule) {
+                afterRule.style.backgroundColor = rgbaColor;
+            } else {
+                styleSheet.insertRule(`.color-preview::after { background-color: ${rgbaColor}; }`, styleSheet.cssRules.length);
+            }
+            
             colorIcon.style.background = rgbaColor;
 
             // Update color info
@@ -280,6 +383,9 @@
             
             if (color) {
                 errorMsg.style.display = 'none';
+                if (!isUpdatingFromInput) {
+                    opacitySlider.value = color.alpha;
+                }
                 updatePreview(color);
             } else {
                 errorMsg.style.display = 'block';
@@ -294,10 +400,23 @@
         // Handle color picker
         colorPicker.addEventListener('input', (e) => {
             const hex = e.target.value;
-            // Default to full opacity when using color picker
-            const androidColor = `#FF${hex.substring(1)}`;
+            const alphaHex = parseInt(opacitySlider.value).toString(16).padStart(2, '0').toUpperCase();
+            const androidColor = `#${alphaHex}${hex.substring(1)}`;
+            isUpdatingFromInput = true;
             colorInput.value = androidColor;
             handleColorInput(androidColor);
+            isUpdatingFromInput = false;
+        });
+
+        // Handle opacity slider
+        opacitySlider.addEventListener('input', (e) => {
+            const hex = colorPicker.value;
+            const alphaHex = parseInt(e.target.value).toString(16).padStart(2, '0').toUpperCase();
+            const androidColor = `#${alphaHex}${hex.substring(1)}`;
+            isUpdatingFromInput = true;
+            colorInput.value = androidColor;
+            handleColorInput(androidColor);
+            isUpdatingFromInput = false;
         });
 
         // Initialize with default color
